@@ -9,7 +9,6 @@ class CH559Flasher {
   #device = null;
   #epIn = 0;
   #epOut = 0;
-  #flashSize = 64;
   #eraseSize = 60;
   #chipId = 0;
 
@@ -99,10 +98,14 @@ class CH559Flasher {
       (this.bootLoader[2] !== '3' && this.bootLoader[2] !== '4')) {
       this.error = 'unknownBootloader';
     }
+    const sum = (response.getUint8(22) + response.getUint8(23) +
+      response.getUint8(24) + response.getUint8(25)) & 0xff;
 
-    const bootKeyCmd = new Uint8Array(3 + 0x38);  // Use null bootkey.
+    const bootKeyCmd = new Uint8Array(0x33);
     bootKeyCmd[0] = 0xa3;
     bootKeyCmd[1] = 0x30;
+    for (let i = 3; i < 0x33; ++i)
+      bootKeyCmd[i] = sum;
     response = await this.#send('bootkey', bootKeyCmd, 6);
     if (!response || response.getUint8(4) != this.#chipId)
       return false;
