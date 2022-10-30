@@ -26,17 +26,17 @@ This should be called before writing to program region.
 Chip will reject write operations for program flash memory until this is
 called.
 
-### writeInRange()
+### writeInRange(addr: number, data: ArrayBuffer)
 Write to the specified range in program flash memory.
 
-### verifyInRange()
+### verifyInRange(addr: number, data: ArrayBuffer)
 Verify if read data match expected data for the specified range in program
 flash memory.
 
-### write()
+### write(firmware: ArrayBuffer, progressCallback: function)
 Write a specified firmware binary.
 
-### verify()
+### verify(firmware: ArrayBuffer, progressCallback: function)
 Verify if read data match expected firmware binary.
 
 ### eraseData()
@@ -45,8 +45,10 @@ All data will be read as 0xFF after this operation and this should be called
 before writing to data region as write operaitons only reset bits, and data
 will be mixed with the existing data via AND operation.
 
-### writeDataInRange()
-Write to the specified range in data flash memory.
+### writeDataInRange(addr: number, data: ArrayBuffer)
+Write to the specified range in data flash memory. The address is an offset
+from DATA_FLASH_ADDR (0xF000).
 
-### readDataInRange()
-Read from the specified range in data flash memory.
+### readDataInRange(addr: number, length: number)
+Read from the specified range in data flash memory. The address is an offset
+from DATA_FLASH_ADDR (0xF000).
