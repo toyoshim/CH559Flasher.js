@@ -11,6 +11,7 @@ class CH559Flasher {
   #epOut = 0;
   #eraseSize = 60;
   #chipId = 0;
+  #initialized = false;
 
   async #send(name, request, responseSize) {
     let result = await this.#device.transferOut(this.#epOut, request);
@@ -26,14 +27,18 @@ class CH559Flasher {
     return result.data;
   }
 
-  async #writeVerifyInRange(addr, buffer, write) {
+  async #writeVerifyInRange(addr, buffer, write, dataRegion) {
     if (this.error)
       return false;
-    const mode = write ? 'write' : 'verify';
+    const mode = write ? (dataRegion ? 'writeData' : 'write') : 'verify';
+    if (buffer.byteLength > 0x38) {
+      this.error = mode + 'InvalidLength';
+      return false;
+    }
     const data = new Uint8Array(buffer);
     const length = (data.length + 7) & ~7;
     const cmd = new Uint8Array(8 + length);
-    cmd[0] = write ? 0xa5 : 0xa6;
+    cmd[0] = write ? (dataRegion ? 0xaa : 0xa5) : 0xa6;
     cmd[1] = length + 5;
     cmd[2] = 0;
     cmd[3] = addr & 0xff;
@@ -126,12 +131,15 @@ class CH559Flasher {
     response = await this.#send('bootkey', bootKeyCmd, 6);
     if (!response || response.getUint8(4) != this.#chipId)
       return false;
+
+    this.initialized = true;
     return true;
   }
 
   async erase() {
-    if (this.error)
+    if (!this.initialized)
       return false;
+    this.error = undefined;
     let response = await this.#send('erase',
       Uint8Array.of(0xa4, 0x01, 0x00, this.#eraseSize), 6);
     if (!response)
@@ -143,19 +151,92 @@ class CH559Flasher {
     return true;
   }
 
+  // `addr` is absolute address
+  // `data` in ArrayBuffer to write
   async writeInRange(addr, data) {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
     return this.#writeVerifyInRange(addr, data, true);
   }
 
+  // `addr` is absolute address
+  // `data` in ArrayBuffer for golden data
   async verifyInRange(addr, data) {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
     return this.#writeVerifyInRange(addr, data, false);
   }
 
+  async eraseData() {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
+    let response = await this.#send('eraseData',
+      Uint8Array.of(0xa9, 0x00, 0x00, 0x00), 6);
+    if (!response)
+      return false;
+    if (response.getUint8(4)) {
+      this.error = 'eraseDataError';
+      return false;
+    }
+    return true;
+  }
+
+  // `addr` is offset from 0xF000 (DATA_FLASH_ADDR)
+  // `data` in ArrayBuffer
+  async writeDataInRange(addr, data) {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
+    return this.#writeVerifyInRange(addr, data, true, true);
+  }
+
+  // `addr` is offset from 0xF000 (DATA_FLASH_ADDR)
+  // `length` in byte to read
+  async readDataInRange(addr, length) {
+    if (!this.initialized)
+      return false;
+    const mode = 'readData';
+    if (length > 0x38) {
+      this.error = mode + 'InvalidLength';
+      return false;
+    }
+    this.error = undefined;
+    const cmd = new Uint8Array(8);
+    cmd[0] = 0xab;
+    cmd[1] = 0;
+    cmd[2] = 0;
+    cmd[3] = addr & 0xff;
+    cmd[4] = (addr >> 8) & 0xff;
+    cmd[5] = 0;
+    cmd[6] = 0;
+    cmd[7] = length;
+    const result = await this.#send(mode, cmd, 6 + length);
+    if (!result)
+      return false;
+    const resultCode = result.getUint8(4);
+    if (resultCode != 0) {
+      this.error = mode + 'Failed: $' + resultCode.toString(16);
+      return false;
+    }
+    return result.buffer.slice(6, 6 + length);
+  }
+
+  // `firmware` in ArrayBuffer
   async write(firmware, progressCallback) {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
     return this.#writeVerify(firmware, progressCallback, true);
   }
 
+  // `firmware` in ArrayBuffer
   async verify(firmware, progressCallback) {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
     return this.#writeVerify(firmware, progressCallback, false);
   }
 }
