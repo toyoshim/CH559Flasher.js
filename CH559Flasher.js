@@ -26,38 +26,55 @@ class CH559Flasher {
     return result.data;
   }
 
+  async #writeVerifyInRange(addr, buffer, write) {
+    if (this.error)
+      return false;
+    const mode = write ? 'write' : 'verify';
+    const data = new Uint8Array(buffer);
+    const length = (data.length + 7) & ~7;
+    const cmd = new Uint8Array(8 + length);
+    cmd[0] = write ? 0xa5 : 0xa6;
+    cmd[1] = length + 5;
+    cmd[2] = 0;
+    cmd[3] = addr & 0xff;
+    cmd[4] = (addr >> 8) & 0xff;
+    cmd[5] = 0;
+    cmd[6] = 0;
+    cmd[7] = length;
+    for (let i = 0; i < length; ++i) {
+      if (i < data.length) {
+        cmd[8 + i] = data[i];
+      } else {
+        cmd[8 + i] = 0xff;
+      }
+      if ((i & 7) != 7)
+        continue;
+      cmd[8 + i] ^= this.#chipId;
+    }
+    const result = await this.#send(mode, cmd, 6);
+    if (!result)
+      return false;
+    const resultCode = result.getUint8(4);
+    if (resultCode != 0) {
+      this.error = mode + 'Failed: $' + resultCode.toString(16);
+      return false;
+    }
+    return true;
+  }
+
   async #writeVerify(firmware, progressCallback, write) {
     if (this.error)
       return false;
-    const data = new Uint8Array(firmware);
-    const cmd = new Uint8Array(64);
-    const mode = write ? 'write' : 'verify';
-    cmd[0] = write ? 0xa5 : 0xa6;
-    for (let i = 0; i < data.length; i += 0x38) {
-      const remainingSize = data.length - i;
-      const payloadSize = (remainingSize >= 0x38) ? 0x38 : remainingSize;
-      cmd[1] = payloadSize + 5;
-      cmd[3] = i & 0xff;
-      cmd[4] = (i >> 8) & 0xff;
-      cmd[7] = remainingSize & 0xff;
-      for (let j = 0; j < payloadSize; ++j)
-        cmd[8 + j] = data[i + j];
-      for (let j = 8 + payloadSize; j < 64; ++j)
-        cmd[j] = 0xff;
-      for (let j = 7; j < 64; j += 8)
-        cmd[j] ^= this.#chipId;
-      const result = await this.#send(mode, cmd, 6);
+    const maxSize = 0x38;
+    for (let i = 0; i < firmware.byteLength; i += maxSize) {
+      const remainingSize = firmware.byteLength - i;
+      const payloadSize = (remainingSize >= maxSize) ? maxSize : remainingSize;
+      const result = await this.#writeVerifyInRange(
+        i, firmware.slice(i, i + payloadSize), write);
       if (!result)
         return false;
-      const resultCode = result.getUint8(4);
-      if (resultCode != 0 && resultCode != 0xfe) {
-        // 0xfe seems to be the result code for the last block that does not
-        // have full data.
-        this.error = mode + 'Failed';
-        return false;
-      }
       if (progressCallback)
-        progressCallback((i + payloadSize) / data.length);
+        progressCallback((i + payloadSize) / firmware.byteLength);
     }
     return true;
   }
@@ -124,6 +141,14 @@ class CH559Flasher {
       return false;
     }
     return true;
+  }
+
+  async writeInRange(addr, data) {
+    return this.#writeVerifyInRange(addr, data, true);
+  }
+
+  async verifyInRange(addr, data) {
+    return this.#writeVerifyInRange(addr, data, false);
   }
 
   async write(firmware, progressCallback) {
