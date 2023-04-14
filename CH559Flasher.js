@@ -137,11 +137,15 @@ class CH559Flasher {
   }
 
   async erase() {
+    return await this.eraseBlock(this.#eraseSize);
+  }
+
+  async eraseBlock(size) {
     if (!this.initialized)
       return false;
     this.error = undefined;
     let response = await this.#send('erase',
-      Uint8Array.of(0xa4, 0x01, 0x00, this.#eraseSize), 6);
+      Uint8Array.of(0xa4, 0x01, 0x00, size), 6);
     if (!response)
       return false;
     if (response.getUint8(4)) {
