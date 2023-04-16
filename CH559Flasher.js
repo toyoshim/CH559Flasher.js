@@ -94,7 +94,10 @@ class CH559Flasher {
     await this.#device.selectConfiguration(
       this.#device.configurations[0].configurationValue);
     await this.#device.claimInterface(
-      this.#device.configuration.interfaces[0].interfaceNumber);
+      this.#device.configuration.interfaces[0].interfaceNumber).catch(e => {
+        this.error = 'claimFailed';
+        return false;
+      });
     for (let ep of
       this.#device.configuration.interfaces[0].alternate.endpoints) {
       if (ep.direction === 'in')
@@ -106,19 +109,24 @@ class CH559Flasher {
     let response = await this.#send('detect',
       Uint8Array.of(0xa1, 0x12, 0x00, 0x59, 0x11, 0x4d, 0x43, 0x55, 0x20, 0x49,
         0x53, 0x50, 0x20, 0x26, 0x20, 0x57, 0x43, 0x48, 0x2e, 0x43, 0x4e), 6);
-    if (!response || response.getUint8(4) != 0x59)
+    if (!response || response.getUint8(4) != 0x59) {
+      this.error = 'detectFailed';
       return false;
+    }
     this.#chipId = response.getUint8(4);
 
     response = await this.#send('identify',
       Uint8Array.of(0xa7, 0x02, 0x00, 0x1f, 0x00), 30);
-    if (!response)
+    if (!response) {
+      this.error = 'identifyFailed';
       return false;
+    }
     this.bootLoader = response.getUint8(19).toString() + '.' +
       response.getUint8(20).toString() + response.getUint8(21).toString();
     if (this.bootLoader[0] !== '2' ||
       (this.bootLoader[2] !== '3' && this.bootLoader[2] !== '4')) {
       this.error = 'unknownBootloader';
+      return false;
     }
     const sum = (response.getUint8(22) + response.getUint8(23) +
       response.getUint8(24) + response.getUint8(25)) & 0xff;
@@ -129,8 +137,10 @@ class CH559Flasher {
     for (let i = 3; i < 0x33; ++i)
       bootKeyCmd[i] = sum;
     response = await this.#send('bootkey', bootKeyCmd, 6);
-    if (!response || response.getUint8(4) != this.#chipId)
+    if (!response || response.getUint8(4) != this.#chipId) {
+      this.error = 'bootkeyError';
       return false;
+    }
 
     this.initialized = true;
     return true;
