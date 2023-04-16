@@ -96,8 +96,10 @@ class CH559Flasher {
     await this.#device.claimInterface(
       this.#device.configuration.interfaces[0].interfaceNumber).catch(e => {
         this.error = 'claimFailed';
-        return false;
       });
+    if (this.error) {
+      return false;
+    }
     for (let ep of
       this.#device.configuration.interfaces[0].alternate.endpoints) {
       if (ep.direction === 'in')
