@@ -19,6 +19,9 @@ class CH559Flasher {
       this.error = name + 'RequestError';
       return null;
     }
+    if (!responseSize)
+      return;
+
     result = await this.#device.transferIn(this.#epIn, responseSize);
     if (result.status !== 'ok') {
       this.error = name + 'ResponseError';
@@ -254,5 +257,17 @@ class CH559Flasher {
       return false;
     this.error = undefined;
     return this.#writeVerify(firmware, progressCallback, false);
+  }
+
+  async boot() {
+    if (!this.initialized)
+      return false;
+    this.error = undefined;
+    const cmd = new Uint8Array(4);
+    cmd[0] = 0xa2;
+    cmd[1] = 0x01;
+    cmd[2] = 0x00;
+    cmd[3] = 0x01;
+    return this.#send('boot', cmd);
   }
 }
