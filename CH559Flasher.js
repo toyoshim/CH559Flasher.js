@@ -290,7 +290,7 @@ class CH559Flasher {
           0x23, 0x00, 0x00, 0x00,
           0xf6, cfg_hi, 0xff, 0x97), 6);
     } else {
-      console.error('this feature is verified only with 2.40 firmware');
+      console.error('this feature is verified only with 2.31/2.40 firmware');
       return false;
     }
   }
