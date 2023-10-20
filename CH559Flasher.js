@@ -270,4 +270,28 @@ class CH559Flasher {
     cmd[3] = 0x01;
     return this.#send('boot', cmd);
   }
+
+  // `cfg_hi` is a 8bits value for the ROM_CFG[15:8]
+  // This is a risky operation that could make the chip out of control
+  async writeConfig(cfg_hi) {
+    if (!this.initialized || !cfg_hi)
+      return false;
+    this.error = undefined;
+    if (this.bootLoader == '2.31') {
+      return this.#send('writeConfig',
+        Uint8Array.of(0xa8, 0x0e, 0x00, 0x07, 0x00,
+          0xff, 0xff, 0xff, 0xff,
+          0x03, 0x00, 0x00, 0x00,
+          0xff, cfg_hi, 0x00, 0x00), 6);
+    } else if (this.bootLoader == '2.40') {
+      return this.#send('writeConfig',
+        Uint8Array.of(0xa8, 0x0e, 0x00, 0x07, 0x00,
+          0xff, 0xff, 0xff, 0xff,
+          0x23, 0x00, 0x00, 0x00,
+          0xf6, cfg_hi, 0xff, 0x97), 6);
+    } else {
+      console.error('this feature is verified only with 2.40 firmware');
+      return false;
+    }
+  }
 }
